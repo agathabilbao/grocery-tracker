@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grocery List Tracker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .grocery-form {
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #f5f5f5;
+            border-radius: 5px;
+        }
+        .grocery-list {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        .grocery-list th, .grocery-list td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        .grocery-list th {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .grocery-list tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+        .delete-btn {
+            background-color: #ff4444;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            cursor: pointer;
+            border-radius: 3px;
+        }
+        .edit-btn {
+            background-color: #44b;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            cursor: pointer;
+            border-radius: 3px;
+        }
+        .shopping-list {
+            margin-top: 20px;
+        }
+        .shopping-list tr td:last-child {
+            color: #666;
+            font-style: italic;
+        }
+        .grocery-list input {
+            border: none;
+            background: transparent;
+            width: 90%;
+            padding: 5px;
+        }
+        .grocery-list input:focus {
+            background: #fff;
+            border: 1px solid #4CAF50;
+            outline: none;
+            border-radius: 3px;
+        }
+        .grocery-list input[type="number"] {
+            width: 70px;
+        }
+        .shopping-list .not-needed {
+            color: #999;
+            background-color: #f9f9f9;
+        }
+        .shopping-list .not-needed td {
+            text-decoration: line-through;
+        }
+    </style>
+</head>
+<body>
+    <h1>Grocery List Tracker</h1>
+
+    <div class="grocery-form">
+        <h2>Add New Item</h2>
+        <form id="groceryForm">
+            <label for="itemName">Item Name:</label>
+            <input type="text" id="itemName" required>
+            
+            <label for="quantity">Target Quantity:</label>
+            <input type="number" id="quantity" required>
+            
+            <label for="currentStock">Current Stock:</label>
+            <input type="number" id="currentStock" required>
+            
+            <label for="duration">Duration (days):</label>
+            <input type="number" id="duration" required>
+            
+            <button type="submit">Add Item</button>
+        </form>
+    </div>
+
+    <table class="grocery-list">
+        <thead>
+            <tr>
+                <th>Item Name</th>
+                <th>Target Quantity</th>
+                <th>Current Stock</th>
+                <th>Duration (days)</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="groceryTableBody">
+            <!-- Items will be added here dynamically -->
+        </tbody>
+    </table>
+
+    <div class="weekly-forecast">
+        <h2>Remaining After One Week</h2>
+        <table class="grocery-list">
+            <thead>
+                <tr>
+                    <th>Item Name</th>
+                    <th>Remaining Quantity</th>
+                </tr>
+            </thead>
+            <tbody id="forecastTableBody">
+                <!-- Forecast will be added here dynamically -->
+            </tbody>
+        </table>
+    </div>
+
+    <div class="shopping-list">
+        <h2>Shopping List for Next Week</h2>
+        <table class="grocery-list">
+            <thead>
+                <tr>
+                    <th>Item Name</th>
+                    <th>Quantity to Buy</th>
+                    <th>Reason</th>
+                </tr>
+            </thead>
+            <tbody id="shoppingListBody">
+                <!-- Shopping recommendations will be added here -->
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        // Initialize groceryList at the start
+        let groceryList = [];
+        let neededItems = [];
+        let notNeededItems = [];
+
+        // Load saved items from localStorage when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            const savedItems = localStorage.getItem('groceryList');
+            if (savedItems) {
+                groceryList = JSON.parse(savedItems);
+                updateTable();
+            }
+        });
+
+        document.getElementById('groceryForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            
+            const itemName = document.getElementById('itemName').value;
+            const quantity = parseInt(document.getElementById('quantity').value);
+            const currentStock = parseInt(document.getElementById('currentStock').value);
+            const duration = parseInt(document.getElementById('duration').value);
+
+            // Check if item already exists
+            const existingItemIndex = groceryList.findIndex(item => 
+                item.name.toLowerCase() === itemName.toLowerCase()
+            );
+
+            if (existingItemIndex !== -1) {
+                // Update existing item while preserving other properties
+                groceryList[existingItemIndex] = {
+                    ...groceryList[existingItemIndex],  // Preserve existing properties
+                    name: itemName,
+                    quantity: quantity,
+                    currentStock: currentStock,
+                    duration: duration
+                };
+            } else {
+                // Add new item
+                groceryList.push({
+                    name: itemName,
+                    quantity: quantity,
+                    currentStock: currentStock,
+                    duration: duration
+                });
+            }
+
+            // Save to localStorage
+            localStorage.setItem('groceryList', JSON.stringify(groceryList));
+            
+            // Update table
+            updateTable();
+            
+            // Clear form
+            e.target.reset();
+        });
+
+        function updateTable() {
+            const tableBody = document.getElementById('groceryTableBody');
+            const forecastBody = document.getElementById('forecastTableBody');
+            const shoppingListBody = document.getElementById('shoppingListBody');
+            
+            tableBody.innerHTML = '';
+            forecastBody.innerHTML = '';
+            shoppingListBody.innerHTML = '';
+
+            // Reset arrays
+            neededItems = [];
+            notNeededItems = [];
+
+            groceryList.forEach((item, index) => {
+                // Original table row with editable fields
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>
+                        <input type="text" value="${item.name}" 
+                            onchange="updateItem(${index}, 'name', this.value)">
+                    </td>
+                    <td>
+                        <input type="number" value="${item.quantity}" 
+                            onchange="updateItem(${index}, 'quantity', this.value)">
+                    </td>
+                    <td>
+                        <input type="number" value="${item.currentStock}" 
+                            onchange="updateItem(${index}, 'currentStock', this.value)">
+                    </td>
+                    <td>
+                        <input type="number" value="${item.duration}" 
+                            onchange="updateItem(${index}, 'duration', this.value)">
+                    </td>
+                    <td>
+                        <button class="delete-btn" onclick="deleteItem(${index})">Delete</button>
+                    </td>
+                `;
+                tableBody.appendChild(row);
+
+                // Updated calculations
+                const dailyUsage = 1 / item.duration;  // How much of one unit is used per day
+                const weeklyUsage = dailyUsage * 7;  // How many units used in a week
+                const remainingQuantity = Math.max(0, item.currentStock - (weeklyUsage * item.currentStock));
+
+                const forecastRow = document.createElement('tr');
+                forecastRow.innerHTML = `
+                    <td>${item.name}</td>
+                    <td>${remainingQuantity.toFixed(1)}</td>
+                `;
+                forecastBody.appendChild(forecastRow);
+
+                // Shopping list calculations
+                const daysUntilEmpty = item.currentStock * item.duration;  // How many days current stock will last
+                const recommendedQuantity = Math.ceil(weeklyUsage * item.quantity);  // How many to buy for a week
+                
+                if (daysUntilEmpty <= 7) {
+                    neededItems.push({
+                        html: `
+                            <td>${item.name}</td>
+                            <td>${recommendedQuantity}</td>
+                            <td>Will run out in ${daysUntilEmpty.toFixed(1)} days (Current: ${item.currentStock})</td>
+                        `,
+                        daysUntilEmpty: daysUntilEmpty
+                    });
+                } else {
+                    notNeededItems.push({
+                        html: `
+                            <td>${item.name}</td>
+                            <td>0</td>
+                            <td>Sufficient for ${daysUntilEmpty.toFixed(1)} days (Current: ${item.currentStock})</td>
+                        `,
+                        daysUntilEmpty: daysUntilEmpty
+                    });
+                }
+            });
+
+            // Sort and add needed items first
+            neededItems.sort((a, b) => a.daysUntilEmpty - b.daysUntilEmpty);
+            neededItems.forEach(item => {
+                const row = document.createElement('tr');
+                row.innerHTML = item.html;
+                shoppingListBody.appendChild(row);
+            });
+
+            // Add not needed items last
+            notNeededItems.sort((a, b) => a.daysUntilEmpty - b.daysUntilEmpty);
+            notNeededItems.forEach(item => {
+                const row = document.createElement('tr');
+                row.classList.add('not-needed');
+                row.innerHTML = item.html;
+                shoppingListBody.appendChild(row);
+            });
+        }
+
+        function deleteItem(index) {
+            groceryList.splice(index, 1);
+            localStorage.setItem('groceryList', JSON.stringify(groceryList));
+            updateTable();
+        }
+
+        function updateItem(index, field, value) {
+            groceryList[index][field] = value;
+            localStorage.setItem('groceryList', JSON.stringify(groceryList));
+            updateTable();
+        }
+    </script>
+</body>
+</html> 
